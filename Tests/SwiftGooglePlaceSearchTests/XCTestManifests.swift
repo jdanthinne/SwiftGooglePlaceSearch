@@ -1,9 +1,9 @@
 import XCTest
 
 #if !canImport(ObjectiveC)
-public func allTests() -> [XCTestCaseEntry] {
-    return [
-        testCase(SwiftGooglePlaceSearchTests.allTests),
-    ]
-}
+    public func allTests() -> [XCTestCaseEntry] {
+        [
+            testCase(SwiftGooglePlaceSearchTests.allTests),
+        ]
+    }
 #endif

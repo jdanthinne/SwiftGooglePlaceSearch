@@ -1,12 +1,12 @@
-import XCTest
 @testable import SwiftGooglePlaceSearch
+import XCTest
 
 final class SwiftGooglePlaceSearchTests: XCTestCase {
     func testExample() {
         // This is an example of a functional test case.
         // Use XCTAssert and related functions to verify your tests produce the correct
         // results.
-        XCTAssertEqual(SwiftGooglePlaceSearch().text, "Hello, World!")
+        XCTAssertEqual(SwiftGooglePlaceSearch(googleAPIKey: "").googleAPIKey, "")
     }
 
     static var allTests = [
