@@ -1,4 +1,4 @@
-import Combine
+import AsyncCompatibilityKit
 import CoreLocation
 import Foundation
 
@@ -24,13 +24,18 @@ public final class SwiftGooglePlaceSearch {
         }
     }
 
+    public enum GooglePlaceSearchError: Error {
+        case invalidResponse
+        case serverError(statusCode: Int)
+    }
+
     public init(googleAPIKey: String) {
         self.googleAPIKey = googleAPIKey
     }
 
     // MARK: - Autocompletion
 
-    public struct AutocompleteResponse: Decodable {
+    struct AutocompleteResponse: Decodable {
         public let predictions: [AutocompletePrediction]
     }
 
@@ -69,7 +74,7 @@ public final class SwiftGooglePlaceSearch {
                              location: CLLocationCoordinate2D? = nil,
                              radiusInMeters: Int? = nil,
                              countries: [AutocompleteCountry] = [],
-                             language: ResultsLanguage = .current) -> AnyPublisher<AutocompleteResponse, Error>
+                             language: ResultsLanguage = .current) async throws -> [AutocompletePrediction]
     {
         var args: [String: String] = [
             "input": input.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "",
@@ -102,17 +107,14 @@ public final class SwiftGooglePlaceSearch {
             args["language"] = languageCode
         }
 
-        return URLSession.shared
-            .dataTaskPublisher(for: request(endpoint: "autocomplete", args: args))
-            .retry(1)
-            .map(\.data)
-            .decode(type: AutocompleteResponse.self, decoder: jsonDecoder)
-            .eraseToAnyPublisher()
+        let results = try await data(ofType: AutocompleteResponse.self, request: request(endpoint: "autocomplete", args: args))
+
+        return results.predictions
     }
 
     // MARK: - Place Details
 
-    public struct PlaceDetailsResponse: Decodable {
+    struct PlaceDetailsResponse: Decodable {
         public let result: PlaceDetailsResult
     }
 
@@ -143,7 +145,7 @@ public final class SwiftGooglePlaceSearch {
 
     public func fetchPlaceDetails(placeID: String,
                                   fields: [PlaceDetailsFields] = [],
-                                  language: ResultsLanguage = .current) -> AnyPublisher<PlaceDetailsResponse, Error>
+                                  language: ResultsLanguage = .current) async throws -> PlaceDetailsResult
     {
         var args: [String: String] = [
             "place_id": placeID,
@@ -159,12 +161,9 @@ public final class SwiftGooglePlaceSearch {
             args["language"] = languageCode
         }
 
-        return URLSession.shared
-            .dataTaskPublisher(for: request(endpoint: "details", args: args))
-            .retry(1)
-            .map(\.data)
-            .decode(type: PlaceDetailsResponse.self, decoder: jsonDecoder)
-            .eraseToAnyPublisher()
+        let response = try await data(ofType: PlaceDetailsResponse.self, request: request(endpoint: "details", args: args))
+
+        return response.result
     }
 
     // MARK: - Helpers
@@ -178,6 +177,20 @@ public final class SwiftGooglePlaceSearch {
         request.httpMethod = "GET"
 
         return request
+    }
+
+    private func data<T: Decodable>(ofType type: T.Type, request: URLRequest) async throws -> T {
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let response = response as? HTTPURLResponse else {
+            throw GooglePlaceSearchError.invalidResponse
+        }
+
+        guard response.statusCode == 200 else {
+            throw GooglePlaceSearchError.serverError(statusCode: response.statusCode)
+        }
+
+        return try jsonDecoder.decode(type.self, from: data)
     }
 }
 
